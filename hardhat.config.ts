@@ -1,6 +1,7 @@
-
-require("@nomiclabs/hardhat-etherscan");
 import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-verify";
+
 
 import dotenv from "dotenv";
 

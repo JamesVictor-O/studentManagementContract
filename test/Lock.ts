@@ -7,121 +7,161 @@ import { expect } from "chai";
 import hre from "hardhat";
 
 describe("Lock", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
-  async function deployOneYearLockFixture() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    const ONE_GWEI = 1_000_000_000;
-
-    const lockedAmount = ONE_GWEI;
-    const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
-
+ 
+  async function deployStudentManagement() {
+   
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await hre.ethers.getSigners();
+    const [owner,account1, otherAccount] = await hre.ethers.getSigners();
 
-    const Lock = await hre.ethers.getContractFactory("Lock");
-    const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+    const StudentManagement = await hre.ethers.getContractFactory("StudentManagement");
+    const studentManagement = await StudentManagement.deploy({ value: hre.ethers.parseEther("1.0") });
 
-    return { lock, unlockTime, lockedAmount, owner, otherAccount };
+    return {studentManagement,  owner, account1, otherAccount };
   }
 
-  describe("Deployment", function () {
-    it("Should set the right unlockTime", async function () {
-      const { lock, unlockTime } = await loadFixture(deployOneYearLockFixture);
+  describe("RegisterStudent", function () {
+    it("Should deploy and set the owner to sender",async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+      expect(await studentManagement.owner()).to.eq(owner)
+    })
 
-      expect(await lock.unlockTime()).to.equal(unlockTime);
-    });
+    it("Should check if student is registered", async function(){
+      const{studentManagement,owner, otherAccount}= await  loadFixture (deployStudentManagement);
+       const studentData={
+        name:"james",
+        age: 13,
+        class: "js3",
+        gender:0
+       }
+    
+       await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
+       const studentID=await studentManagement.studentsID(0);
+       const student=await studentManagement.students(studentID)
 
-    it("Should set the right owner", async function () {
-      const { lock, owner } = await loadFixture(deployOneYearLockFixture);
+       expect(studentID).to.equal(1)
+       expect(student.name).to.eq(studentData.name);
+       expect(student.age).to.eq(studentData.age);
+    })
 
-      expect(await lock.owner()).to.equal(owner.address);
-    });
+    it("Should check if only admin can register", async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+      const studentData={
+       name:"james",
+       age: 13,
+       class: "js3",
+       gender:0
+      }
+     
 
-    it("Should receive and store the funds to lock", async function () {
-      const { lock, lockedAmount } = await loadFixture(
-        deployOneYearLockFixture
-      );
+      await expect(studentManagement.connect(otherAccount).registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)).to.be.revertedWith("You are not the admin")
+    })
 
-      expect(await hre.ethers.provider.getBalance(lock.target)).to.equal(
-        lockedAmount
-      );
-    });
-
-    it("Should fail if the unlockTime is not in the future", async function () {
-      // We don't use the fixture here because we want a different deployment
-      const latestTime = await time.latest();
-      const Lock = await hre.ethers.getContractFactory("Lock");
-      await expect(Lock.deploy(latestTime, { value: 1 })).to.be.revertedWith(
-        "Unlock time should be in the future"
-      );
-    });
+    it("Should Emit CreateStudent Event", async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+      const studentData={
+       name:"james",
+       age: 13,
+       class: "js3",
+       gender:0
+      }
+      await expect(studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)).emit(studentManagement, "CreatedStudent").withArgs(studentData.name,studentData.class,studentData.age)
+    })
   });
 
-  describe("Withdrawals", function () {
-    describe("Validations", function () {
-      it("Should revert with the right error if called too soon", async function () {
-        const { lock } = await loadFixture(deployOneYearLockFixture);
 
-        await expect(lock.withdraw()).to.be.revertedWith(
-          "You can't withdraw yet"
-        );
-      });
+  describe("GetStudent", function(){
+    it("Should Get Student",async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+       const studentData={
+        name:"james",
+        age: 13,
+        class: "js3",
+        gender:0
+       }
+       await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
+       const studentID=await studentManagement.studentsID(0);
+       const student=await studentManagement.getStudent(studentID);
 
-      it("Should revert with the right error if called from another account", async function () {
-        const { lock, unlockTime, otherAccount } = await loadFixture(
-          deployOneYearLockFixture
-        );
+       expect(student.name).to.eq(studentData.name)
+    })
+  })
 
-        // We can increase the time in Hardhat Network
-        await time.increaseTo(unlockTime);
+  describe("Get Students", function(){
+    it("Should test for student Array more than two", async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+      const studentData={
+       name:"james",
+       age: 13,
+       class: "js3",
+       gender:0
+      }
 
-        // We use lock.connect() to send a transaction from another account
-        await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-          "You aren't the owner"
-        );
-      });
+      await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
+      await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
+     const students= await studentManagement.getStudents();
 
-      it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-        const { lock, unlockTime } = await loadFixture(
-          deployOneYearLockFixture
-        );
+     expect(students.length).to.equal(2)
+    
+    })
 
-        // Transactions are sent using the first signer by default
-        await time.increaseTo(unlockTime);
+    it("Should Return Empty Array When No Student",async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+     const students=await studentManagement.getStudents();
 
-        await expect(lock.withdraw()).not.to.be.reverted;
-      });
-    });
+      expect(students.length).to.equal(0)
+    })
+  })
 
-    describe("Events", function () {
-      it("Should emit an event on withdrawals", async function () {
-        const { lock, unlockTime, lockedAmount } = await loadFixture(
-          deployOneYearLockFixture
-        );
+  describe("Enroll",function(){
+    it("Should Enroll Student", async function(){
+      const{studentManagement,owner, otherAccount}= await loadFixture(deployStudentManagement);
+       const Enroll={
+        student:"james",
+        course:2
+       }
+       const studentData={
+        name:"james",
+        age: 13,
+        class: "js3",
+        gender:0
+       }
+ 
+       await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
 
-        await time.increaseTo(unlockTime);
+       const studentID=await studentManagement.studentsID(0);
 
-        await expect(lock.withdraw())
-          .to.emit(lock, "Withdrawal")
-          .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
-      });
-    });
 
-    describe("Transfers", function () {
-      it("Should transfer the funds to the owner", async function () {
-        const { lock, unlockTime, lockedAmount, owner } = await loadFixture(
-          deployOneYearLockFixture
-        );
+      await studentManagement.enrollCourse(studentID, Enroll.course)
 
-        await time.increaseTo(unlockTime);
+      const enrolledCourse = await studentManagement.courses(studentID);
 
-        await expect(lock.withdraw()).to.changeEtherBalances(
-          [owner, lock],
-          [lockedAmount, -lockedAmount]
-        );
-      });
-    });
-  });
+      
+      expect(enrolledCourse.name).to.eq(Enroll.student);
+    })
+
+    it("Only Owner Can Enroll Student", async function () {
+      const{studentManagement,owner,account1, otherAccount}= await loadFixture(deployStudentManagement);
+      const Enroll={
+       student:"james",
+       course:2
+      }
+      const studentData={
+       name:"james",
+       age: 13,
+       class: "js3",
+       gender:0
+      }
+
+      await studentManagement.registerStudent(studentData.name,studentData.age, studentData.class,studentData.gender)
+
+
+      const studentID=await studentManagement.studentsID(0);
+
+     await expect(studentManagement.connect(account1).enrollCourse(studentID, Enroll.course)).to.revertedWith("You are not the admin")
+    })
+  })
+  
+
+
+
 });

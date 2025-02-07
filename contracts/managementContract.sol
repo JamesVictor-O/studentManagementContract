@@ -2,9 +2,9 @@
 pragma solidity ^0.8.28;
 
 contract StudentManagement {
-    address owner;
+    address public owner;
 
-    constructor() {
+    constructor() payable{
         owner = msg.sender;
     }
 
@@ -18,14 +18,14 @@ contract StudentManagement {
     enum Subjects {English, Mathmathics, Biology, Chemistry,Music}
 
     mapping (uint256 => string) name;
-    mapping(uint8 => Student) students;
+    mapping(uint8 => Student)  public students;
     // maping for enroling students with the key been a uint8 which is the student is and the value being a struct
     mapping(uint8 => Enroll) public courses;
 
     // mapping for paying student school fees, key will be the student is while value will be about being sent.
     mapping(uint8 => uint) public schoolFess;
 
-    // maping for grading of students
+    // maping for grading of studentsenrollCourse
     mapping(uint => Grade) public grading;
     
 
@@ -110,7 +110,7 @@ contract StudentManagement {
        students_;
     }
     //  enroll student for a particular class
-    function enrollCourse(uint8 _studentId, EnrollCourse course)public returns(string memory student) {
+    function enrollCourse(uint8 _studentId, EnrollCourse course) public  onlyOwner returns (string memory student) {
          student=students[_studentId].name;
          Enroll memory enrollStudent=Enroll(student,course);
 
